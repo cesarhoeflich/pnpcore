@@ -15,6 +15,7 @@ namespace PnP.Core.Model.SharePoint
     /// </summary>
     [SharePointType("SP.File", Target = typeof(Folder), Uri = "_api/Web/getFileById('{Id}')", Get = "_api/Web/getFolderById('{Parent.Id}')/Files", LinqGet = "_api/Web/getFolderById('{Parent.Id}')/Files")]
     [SharePointType("SP.File", Target = typeof(Web), Uri = "_api/Web/getFileById('{Id}')")]
+    [SharePointType("SP.File", Target = typeof(ListItem), Uri = "_api/Web/lists(guid'{List.Id}')/items({Parent.Id})/file")]
     internal partial class File : BaseDataModel<IFile>, IFile
     {
         internal const string AddFileContentAdditionalInformationKey = "Content";
@@ -38,8 +39,6 @@ namespace PnP.Core.Model.SharePoint
         public Guid ListId { get => GetValue<Guid>(); set => SetValue(value); }
 
         public string ETag { get => GetValue<string>(); set => SetValue(value); }
-
-        public bool Exists { get => GetValue<bool>(); set => SetValue(value); }
 
         public bool HasAlternateContentStreams { get => GetValue<bool>(); set => SetValue(value); }
 
@@ -758,6 +757,22 @@ namespace PnP.Core.Model.SharePoint
             return apiCall;
         }
         #endregion
+
+        #endregion
+
+        #region Helper methods
+        internal static bool ErrorIndicatesFileDoesNotExists(SharePointRestError error)
+        {
+            // Indicates the file did not exist
+            if (error.HttpResponseCode == 404 && error.ServerErrorCode == -2130575338)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
 
         #endregion
     }

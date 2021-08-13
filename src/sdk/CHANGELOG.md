@@ -10,6 +10,43 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Added IWeb.GetFileByServerRelativeUrlOrDefault methods that can return null for non existing files + dropped the IFile.Exists property as it never really worked [jansenbe - Bert Jansen]
+
+### Changed
+
+## [1.3.0]
+
+### Added
+
+- Support for working with IListItem attachments [jansenbe - Bert Jansen]
+- Page scheduling support: enable a pages library for page publish scheduling and schedule the publishing of a page [jansenbe - Bert Jansen]
+- IsSubSite methods on IWeb [jansenbe - Bert Jansen]
+- Support for converting the site's datetime to UTC and vice versa [jansenbe - Bert Jansen]
+- Using @mentioning in page/listitem comments and replies [jansenbe - Bert Jansen]
+- Support for downloading versions of a file #483 [DaleyKD - Kyle Daley]
+- Support for ListItem versions #481 [DaleyKD - Kyle Daley]
+- Support for liking/unliking pages + adding/deleting comments and comment replies + like/unlike these comments on pages [jansenbe - Bert Jansen]
+- Support for adding/deleting comments and comment replies + like/unlike these comments on list items [jansenbe - Bert Jansen]
+
+### Changed
+
+- Reliabilty update when parsing taxonomy field json [jansenbe - Bert Jansen]
+- Throw exception when using a REST based list item add/update while only the user id is specified [jansenbe - Bert Jansen]
+- "Special" field value types (User, Lookup, Url, Taxonomy) were wrongly marked as changed on data load causing blanking out data with item updates [jansenbe - Bert Jansen]
+- Fixed the SharePoint Syntex ClassifyAndExtract functionality to skip folders and work well with large lists [jansenbe - Bert Jansen]
+- Fixed issue when using AddValidateUpdateItemUsingPath (used for IlistItem adds) is returning a field level add error - now an exception is thrown [jansenbe - Bert Jansen]
+- Fixed memory leaks for use cases that resulted in repeated creation of the Azure AppInsights TelemetryClient [jansenbe - Bert Jansen]
+- Fixed bug that resulted in an unneeded query due to paging #486 [PaoloPia - Paolo Pialorsi]
+
+## [1.2.0]
+
+### Added
+
+- Support for getting changes on IWeb, ISite, IList, IListItem and IFolder [DaleyKD - Kyle Daley]
+- Added support batching custom SPO REST / Microsoft Graph calls [jansenbe - Bert Jansen]
+- Added support to request additional Site/Web properties to be loaded as part of the PnPContext initialization [DaleyKD - Kyle Daley] and [jansenbe - Bert Jansen]
+- Added support for adding custom HTTP headers when executing a custom apirequest via ExecuteRequest #459 [czullu - Christian Zuellig]
+- Added support to load an IFile directly off of an IListItem #463 [DaleyKD - Kyle Daley]
 - Added missing properties to IListItem and GetDisplayName methods #452 [DaleyKD - Kyle Daley]
 - Added missing properties to IFile #445 [DaleyKD - Kyle Daley]
 - Support for making custom SPO REST / Microsoft Graph calls [jansenbe - Bert Jansen]
@@ -17,6 +54,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- Upgrade to version 4.30.1 of Microsoft.Identity.Web [jansenbe - Bert Jansen]
+- Upgrade to version 6.11.1 of System.IdentityModel.Tokens.Jwt [jansenbe - Bert Jansen]
+- Optimized initial load to speed up detection of "Templates" folder [jansenbe - Bert Jansen]
+- Detect existing templates folder if it's not named "Templates" [jansenbe - Bert Jansen]
+- Handle SPO REST's replacement of _ with _x005f_ and space with _x0020_ when deserializing data [jansenbe - Bert Jansen]
+- Added ChangeTokenOptions class to allow creation of an IChangeToken #471 [DaleyKD - Kyle Daley]
+- Fixed an issue where adding items to the root site collection resulted in a 404 #470 [DaleyKD - Kyle Daley]
+- Split batches containing Graph Beta and Graph V1 requests into individual batches [jansenbe - Bert Jansen]
+- Prevent unneeded extra requests in a batch when the a previous batch was reused [jansenbe - Bert Jansen]
+- Fixed loading of extra properties on retrieved content types [jansenbe - Bert Jansen]
+- Renamed GetFolder methods on IListItem to GetParentFolder [jansenbe - Bert Jansen]
+- Improved reliability for ChunkedFileUpload #465 [thechriskent - Chris Kent]
+- Fixed nested QueryProperties() use on non-collection expandable properties (e.g. List.RootFolder) [jansenbe - Bert Jansen]
+- List item documentation update #461 [cesarhoeflich - Cesar Hoeflich]
+- Fix for supporting teams apps as web parts on pages [jansenbe - Bert Jansen]
 - RenderListDataAsStream populates the IListItem's IContentType [jansenbe - Bert Jansen]
 - Fixed NullReferenceException in Values_CollectionChange (issue #447) #445 [DaleyKD - Kyle Daley]
 - Ensure the Context.Group model has it's groupid set if that was available [jansenbe - Bert Jansen]

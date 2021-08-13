@@ -1,6 +1,7 @@
 ﻿using PnP.Core.Model.Security;
 using PnP.Core.Services;
 using System;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 
 namespace PnP.Core.Model.SharePoint
@@ -9,7 +10,7 @@ namespace PnP.Core.Model.SharePoint
     /// Public interface to define a SharePoint Online list item
     /// </summary>
     [ConcreteType(typeof(ListItem))]
-    public interface IListItem : IDataModel<IListItem>, IDataModelGet<IListItem>, IDataModelLoad<IListItem>, IDataModelUpdate, IDataModelDelete, IExpandoDataModel, IQueryableDataModel
+    public interface IListItem : IDataModel<IListItem>, IDataModelGet<IListItem>, IDataModelLoad<IListItem>, IDataModelUpdate, IDataModelDelete, IDataModelSupportingGetChanges, IExpandoDataModel, IQueryableDataModel
     {
         /// <summary>
         /// Id of the list item
@@ -64,9 +65,7 @@ namespace PnP.Core.Model.SharePoint
         /// <summary>
         /// The folder, if any, represented by the list item
         /// </summary>
-#pragma warning disable CA1721 // Property names should not match get methods
         public IFolder Folder { get; }
-#pragma warning restore CA1721 // Property names should not match get methods
 
         /// <summary>
         /// The list for the list item
@@ -99,9 +98,24 @@ namespace PnP.Core.Model.SharePoint
         public IRoleAssignmentCollection RoleAssignments { get; }
 
         /// <summary>
+        /// Information about the likes on this list item
+        /// </summary>
+        public ILikedByInformation LikedByInformation { get; }
+
+        /// <summary>
+        /// Gets a value that returns a collection of list item version objects that represent the versions of the list item
+        /// </summary>
+        public IListItemVersionCollection Versions { get; }
+
+        /// <summary>
+        /// Collection of attachments for this list item
+        /// </summary>
+        public IAttachmentCollection AttachmentFiles { get; }
+
+        /// <summary>
         /// A special property used to add an asterisk to a $select statement
         /// </summary>
-        public object AllColumns { get; }
+        public object All { get; }
 
         #region Extension methods
 
@@ -155,13 +169,13 @@ namespace PnP.Core.Model.SharePoint
         /// Returns the <see cref="IFolder"/> that holds this item
         /// </summary>
         /// <returns>The <see cref="IFolder"/> for this item is returned, if the item itself is a folder then the item is returned as <see cref="IFolder"/>.</returns>
-        public Task<IFolder> GetFolderAsync();
+        public Task<IFolder> GetParentFolderAsync();
 
         /// <summary>
         /// Returns the <see cref="IFolder"/> that holds this item
         /// </summary>
         /// <returns>The <see cref="IFolder"/> for this item is returned, if the item itself is a folder then the item is returned as <see cref="IFolder"/>.</returns>
-        public IFolder GetFolder();
+        public IFolder GetParentFolder();
         #endregion
 
         #region SystemUpdate
@@ -667,6 +681,20 @@ namespace PnP.Core.Model.SharePoint
         /// <param name="roleDefinition">Role definition to remove</param>
         /// <returns></returns>
         public Task RemoveRoleDefinitionBatchAsync(Batch batch, int principalId, IRoleDefinition roleDefinition);
+        #endregion
+
+        #region Comments and liking
+        /// <summary>
+        /// Get list item comments
+        /// </summary>
+        /// <param name="selectors">The expressions declaring the fields to select</param>
+        public Task<ICommentCollection> GetCommentsAsync(params Expression<Func<IComment, object>>[] selectors);
+
+        /// <summary>
+        /// Get list item comments
+        /// </summary>
+        /// <param name="selectors">The expressions declaring the fields to select</param>
+        public ICommentCollection GetComments(params Expression<Func<IComment, object>>[] selectors);
         #endregion
 
         #endregion

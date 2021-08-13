@@ -228,7 +228,7 @@ namespace PnP.Core.Model.SharePoint
 
         internal Task<IBatchSingleResult<IList>> BatchGetByTitleAsync(Batch batch, string title, params Expression<Func<IList, object>>[] expressions)
         {
-            return GetBatchAsync(batch, apiOverride: GetByTitleApiCall(title), selectors: expressions);
+            return GetBatchAsync(batch, GetByTitleApiCall(title), expressions);
         }
         #endregion
 
@@ -683,7 +683,7 @@ namespace PnP.Core.Model.SharePoint
 
         public async Task<IListItem> AddListFolderAsync(string path, string parentFolder = null, string contentTypeId = "0x0120")
         {
-            return await this.Items.AddAsync(new Dictionary<string, object>
+            return await Items.AddAsync(new Dictionary<string, object>
             {
                 {
                     "Title",path
@@ -702,41 +702,25 @@ namespace PnP.Core.Model.SharePoint
         public async Task<List<ISyntexClassifyAndExtractResult>> ClassifyAndExtractAsync(bool force = false, int pageSize = 500)
         {
             // load required fields in this list
-            string viewXml = @"<View>
+            string viewXml = @"<View Scope='Recursive'>
                     <ViewFields>
                       <FieldRef Name='FileDirRef' />
                       <FieldRef Name='FileLeafRef' />
                       <FieldRef Name='UniqueId' />
                       <FieldRef Name='PrimeLastClassified' />
                     </ViewFields>   
-                    {1}
+                    <OrderBy Override='TRUE'><FieldRef Name= 'ID' Ascending= 'FALSE' /></OrderBy>
                     <RowLimit Paged='TRUE'>{0}</RowLimit>
                    </View>";
 
             bool paging = true;
             string nextPageInfo = null;
-            string filter;
-
-            if (!force)
-            {
-                filter = @"<Query>
-                      <Where>
-                        <IsNull>
-                          <FieldRef Name='PrimeLastClassified'/>                          
-                        </IsNull>
-                      </Where>
-                    </Query>";
-            }
-            else
-            {
-                filter = "";
-            }
 
             while (paging)
             {
                 var queryOptions = new RenderListDataOptions()
                 {
-                    ViewXml = string.Format(viewXml, pageSize, filter),
+                    ViewXml = string.Format(viewXml, pageSize),
                     RenderOptions = RenderListDataOptionsFlags.ListData
                 };
 
@@ -768,21 +752,28 @@ namespace PnP.Core.Model.SharePoint
             var batch = PnPContext.NewBatch();
             foreach (var file in Items.AsRequested())
             {
+                // We use client side filtering to prevent re-processing already processed files, doing 
+                // this filter via the CAML query will triggers a list scan and as such results in throttling/large list issues
+                if (!force && file.Values["PrimeLastClassified"] != null)
+                {
+                    continue;
+                }
+
                 var apiCall = CreateClassifyAndExtractApiCall(Guid.Parse(file.Values["UniqueId"].ToString()));
                 apiCall.RawSingleResult = new SyntexClassifyAndExtractResult();
-                apiCall.RawResultsHandler = (json, apiCall) =>
+                apiCall.RawResultsHandler = (json, call) =>
                 {
                     var result = ProcessClassifyAndExtractResponse(json);
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).Created = result.Created;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).DeliverDate = result.DeliverDate;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).ErrorMessage = result.ErrorMessage;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).Id = result.Id;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).Status = result.Status;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).StatusCode = result.StatusCode;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).TargetServerRelativeUrl = result.TargetServerRelativeUrl;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).TargetSiteUrl = result.TargetSiteUrl;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).TargetWebServerRelativeUrl = result.TargetWebServerRelativeUrl;
-                    (apiCall.RawSingleResult as SyntexClassifyAndExtractResult).WorkItemType = result.WorkItemType;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).Created = result.Created;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).DeliverDate = result.DeliverDate;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).ErrorMessage = result.ErrorMessage;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).Id = result.Id;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).Status = result.Status;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).StatusCode = result.StatusCode;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).TargetServerRelativeUrl = result.TargetServerRelativeUrl;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).TargetSiteUrl = result.TargetSiteUrl;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).TargetWebServerRelativeUrl = result.TargetWebServerRelativeUrl;
+                    (call.RawSingleResult as SyntexClassifyAndExtractResult).WorkItemType = result.WorkItemType;
                 };
 
                 var batchRequest = await RawRequestBatchAsync(batch, apiCall, HttpMethod.Post).ConfigureAwait(false);
@@ -843,6 +834,22 @@ namespace PnP.Core.Model.SharePoint
             var apiCall = new ApiCall("_api/machinelearning/workitems", ApiType.SPORest, body);
             return apiCall;
         }
+        #endregion
+
+        #region Get Changes
+
+        public async Task<IList<IChange>> GetChangesAsync(ChangeQueryOptions query)
+        {
+            var apiCall = ChangeCollectionHandler.GetApiCall(this, query);
+            var response = await RawRequestAsync(apiCall, HttpMethod.Post).ConfigureAwait(false);
+            return ChangeCollectionHandler.Deserialize(response, this, PnPContext).ToList();
+        }
+
+        public IList<IChange> GetChanges(ChangeQueryOptions query)
+        {
+            return GetChangesAsync(query).GetAwaiter().GetResult();
+        }
+
         #endregion
 
         #endregion

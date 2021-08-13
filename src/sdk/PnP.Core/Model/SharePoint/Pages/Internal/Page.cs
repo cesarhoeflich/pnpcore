@@ -22,7 +22,7 @@ namespace PnP.Core.Model.SharePoint
         private string pageTitle;
         private string pageName;
         private static readonly Expression<Func<IList, object>>[] getPagesLibraryExpression = new Expression<Func<IList, object>>[] {p => p.Title, p => p.TemplateType, p => p.EnableFolderCreation,
-            p => p.EnableMinorVersions, p => p.EnableModeration, p => p.EnableVersioning, p => p.ForceCheckout, p => p.RootFolder, p => p.ListItemEntityTypeFullName, p => p.Fields };
+            p => p.EnableMinorVersions, p => p.EnableModeration, p => p.EnableVersioning, p => p.ForceCheckout, p => p.RootFolder.QueryProperties(p => p.Properties, p => p.ServerRelativeUrl), p => p.ListItemEntityTypeFullName, p => p.Fields };
 #pragma warning disable CA5351 // Do Not Use Broken Cryptographic Algorithms
         private static readonly MD5 md5 = MD5.Create();
 #pragma warning restore CA5351 // Do Not Use Broken Cryptographic Algorithms
@@ -47,7 +47,7 @@ namespace PnP.Core.Model.SharePoint
         #endregion
 
         #region Page Properties
-        
+
         /// <summary>
         /// Title of the client side page
         /// </summary>
@@ -171,6 +171,21 @@ namespace PnP.Core.Model.SharePoint
             }
         }
 
+        public DateTime? ScheduledPublishDate 
+        { 
+            get
+            {
+                if (PageListItem != null && PageListItem.Values.ContainsKey(PageConstants._PublishStartDate) && PageListItem[PageConstants._PublishStartDate] != null)
+                {
+                    string publishDateString = PageListItem[PageConstants._PublishStartDate].ToString();
+
+                    return Convert.ToDateTime(publishDateString);
+                }
+
+                return null;
+            }
+        }
+
         /// <summary>
         /// Returns the page header for this page
         /// </summary>
@@ -253,7 +268,7 @@ namespace PnP.Core.Model.SharePoint
             List<IPage> loadedPages = new List<IPage>();
 
             // Get a reference to the pages library, reuse the existing one if the correct properties were loaded
-            IList pagesLibrary = await EnsurePagesLibraryAsync(context).ConfigureAwait(false);            
+            IList pagesLibrary = await EnsurePagesLibraryAsync(context).ConfigureAwait(false);
 
             // Prepare CAML query to load the list items
             await GetPagesListData(pageName, pagesLibrary).ConfigureAwait(false);
@@ -335,6 +350,7 @@ namespace PnP.Core.Model.SharePoint
                     <FieldRef Name='{PageConstants._OriginalSourceWebId}' />
                     <FieldRef Name='{PageConstants._OriginalSourceListId}' />
                     <FieldRef Name='{PageConstants._OriginalSourceItemId}' />
+                    {{3}}
                   </ViewFields>
                   <RowLimit Paged='TRUE'>500</RowLimit>
                   <Query>
@@ -349,6 +365,12 @@ namespace PnP.Core.Model.SharePoint
                     </Where>
                   </Query>
                 </View>";
+
+            string extraPropertiesToLoad = $"";
+            if (pagesLibrary.Fields.AsRequested().FirstOrDefault(p=>p.InternalName == PageConstants._PublishStartDate) != null)
+            {
+                extraPropertiesToLoad = "<FieldRef Name='{PageConstants._PublishStartDate}' />";
+            }
 
             if (!string.IsNullOrEmpty(pageNameWithoutFolder))
             {
@@ -378,11 +400,11 @@ namespace PnP.Core.Model.SharePoint
                           <Value Type='text'><![CDATA[{pageNameWithoutFolder}]]></Value>
                         </BeginsWith>";
                 }
-                pageQuery = string.Format(pageQuery, pageNameFilter, "<And>", "</And>");
+                pageQuery = string.Format(pageQuery, pageNameFilter, "<And>", "</And>", extraPropertiesToLoad);
             }
             else
             {
-                pageQuery = string.Format(pageQuery, "", "", "");
+                pageQuery = string.Format(pageQuery, "", "", "", extraPropertiesToLoad);
             }
 
             // Remove unneeded cariage returns
@@ -480,8 +502,6 @@ namespace PnP.Core.Model.SharePoint
         {
             IList pagesLibrary = await EnsurePagesLibraryAsync(PnPContext).ConfigureAwait(false);
 
-            // Templates folder is indicated via a property bag entry
-            await pagesLibrary.RootFolder.EnsurePropertiesAsync(p => p.Properties).ConfigureAwait(false);
             var folderGuid = pagesLibrary.RootFolder.Properties.GetString(PageConstants.TemplatesFolderGuid, null);
 
             if (folderGuid == null)
@@ -1717,7 +1737,7 @@ namespace PnP.Core.Model.SharePoint
             if ((layoutType == PageLayoutType.Article || LayoutType == PageLayoutType.Spaces) && PageListItem[PageConstants.BannerImageUrlField] != null)
             {
                 if (string.IsNullOrEmpty(PageListItem[PageConstants.BannerImageUrlField].ToString()) ||
-                    ((PageListItem[PageConstants.BannerImageUrlField] is FieldUrlValue bannerImageUrlFieldValue) && 
+                    ((PageListItem[PageConstants.BannerImageUrlField] is FieldUrlValue bannerImageUrlFieldValue) &&
                       bannerImageUrlFieldValue.Url.Contains("/_layouts/15/images/sitepagethumbnail.png", StringComparison.InvariantCultureIgnoreCase)))
                 {
                     string previewImageServerRelativeUrl = "";
@@ -1812,26 +1832,7 @@ namespace PnP.Core.Model.SharePoint
                 pageName += ".aspx";
             }
 
-            IFile pageFile = null;
-
-            try
-            {
-                pageFile = await pagesLibrary.PnPContext.Web.GetFileByServerRelativeUrlAsync($"{pagesLibrary.RootFolder.ServerRelativeUrl}/{pageName}", p => p.ListItemAllFields, p => p.ServerRelativeUrl).ConfigureAwait(false);
-            }
-            catch (SharePointRestServiceException ex)
-            {
-                // The file /sites/prov-1/SitePages/PNP_SDK_TEST_CreateAndUpdatePage.aspx does not exist.
-                if ((ex.Error as SharePointRestError).ServerErrorCode == -2130575338)
-                {
-                    // ignore this error
-                }
-                else
-                {
-                    throw ex;
-                }
-            }
-
-            return pageFile;
+            return await pagesLibrary.PnPContext.Web.GetFileByServerRelativeUrlOrDefaultAsync($"{pagesLibrary.RootFolder.ServerRelativeUrl}/{pageName}", p => p.ListItemAllFields, p => p.ServerRelativeUrl, p => p.ListId).ConfigureAwait(false);
         }
 
         private async Task EnsurePageListItemAsync(string pageName)
@@ -1843,6 +1844,15 @@ namespace PnP.Core.Model.SharePoint
                 (var folderName, var pageNameWithoutFolder) = PageToPageNameAndFolder(pageName);
 
                 PageListItem = pageFile.ListItemAllFields;
+
+                // plug in the pages library list id in metadata to help with url token resolving
+                if (PageListItem is IMetadataExtensible metadataExtensible)
+                {
+                    if (!metadataExtensible.Metadata.ContainsKey(PnPConstants.MetaDataListId))
+                    {
+                        metadataExtensible.Metadata.Add(PnPConstants.MetaDataListId, pageFile.ListId.ToString());
+                    }
+                }
 
                 if (!PageListItem.Values.ContainsKey(PageConstants.FileDirRef))
                 {
@@ -2026,7 +2036,7 @@ namespace PnP.Core.Model.SharePoint
         {
             if (PageListItem != null)
             {
-                return await PnPContext.Web.GetFileByServerRelativeUrlAsync($"{PageListItem[PageConstants.FileDirRef]}/{PageListItem[PageConstants.FileLeafRef]}", expressions).ConfigureAwait(false);                
+                return await PnPContext.Web.GetFileByServerRelativeUrlAsync($"{PageListItem[PageConstants.FileDirRef]}/{PageListItem[PageConstants.FileLeafRef]}", expressions).ConfigureAwait(false);
             }
             else
             {
@@ -2034,7 +2044,7 @@ namespace PnP.Core.Model.SharePoint
             }
         }
 
-        public void Publish(string comment=null)
+        public void Publish(string comment = null)
         {
             PublishAsync(comment).GetAwaiter().GetResult();
         }
@@ -2043,29 +2053,25 @@ namespace PnP.Core.Model.SharePoint
         {
             if (PageListItem != null)
             {
-                var pageFile = await PnPContext.Web.GetFileByServerRelativeUrlAsync($"{PageListItem[PageConstants.FileDirRef]}/{PageListItem[PageConstants.FileLeafRef]}", f => f.ListId, f => f.Exists, f => f.CheckOutType).ConfigureAwait(false);
-                if (pageFile.Exists)
+                var pageFile = await PnPContext.Web.GetFileByServerRelativeUrlOrDefaultAsync($"{PageListItem[PageConstants.FileDirRef]}/{PageListItem[PageConstants.FileLeafRef]}", f => f.ListId, f => f.CheckOutType).ConfigureAwait(false);
+                if (pageFile != null)
                 {
-                    //var sitePagesLibrary = await PnPContext.Web.Lists.GetByIdAsync(pageFile.ListId,
-                    //    l => l.EnableMinorVersions,
-                    //    l => l.EnableModeration,
-                    //    l => l.ForceCheckout).ConfigureAwait(false);
                     var sitePagesLibrary = await EnsurePagesLibraryAsync(PnPContext).ConfigureAwait(false);
 
                     if (pageFile.CheckOutType != CheckOutType.None)
-                    { 
+                    {
                         // Needs checkin
                         await pageFile.CheckinAsync(comment, sitePagesLibrary.EnableMinorVersions ? CheckinType.MinorCheckIn : CheckinType.MajorCheckIn).ConfigureAwait(false);
                     }
 
                     if (sitePagesLibrary.EnableMinorVersions)
-                    { 
+                    {
                         // Publishing
                         await pageFile.PublishAsync(comment).ConfigureAwait(false);
                     }
 
                     if (sitePagesLibrary.EnableModeration)
-                    { 
+                    {
                         // Approval 
                         await pageFile.ApproveAsync(comment).ConfigureAwait(false);
                     }
@@ -2123,7 +2129,7 @@ namespace PnP.Core.Model.SharePoint
             // Set promoted state
             PageListItem[PageConstants.PromotedStateField] = (int)PromotedState.Promoted;
             // Set publication date
-            PageListItem[PageConstants.FirstPublishedDate] = DateTime.UtcNow;
+            PageListItem[PageConstants.FirstPublishedDate] = DateTime.Now;
             // Don't use UpdateOverWriteVersion here as the page can already be checked in, doing so will give an 
             // "Additions to this Web site have been blocked" error
             await PageListItem.SystemUpdateAsync().ConfigureAwait(false);
@@ -2152,7 +2158,59 @@ namespace PnP.Core.Model.SharePoint
         }
         #endregion
 
-        #region Page comment handling
+        #region Page scheduling
+
+        public async Task SchedulePublishAsync(DateTime publishDate)
+        {
+            // Ensure this pages library can handle scheduled publishing
+            await PnPContext.Web.EnsurePageSchedulingAsync().ConfigureAwait(false);
+
+            // ensure we do have the page list item loaded
+            if (PageListItem == null)
+            {
+                await EnsurePageListItemAsync(pageName).ConfigureAwait(false);
+            }
+
+            // Set the scheduled publish date
+            PageListItem[PageConstants._PublishStartDate] = publishDate;
+
+            // Don't use UpdateOverWriteVersion here as the page can already be checked in, doing so will give an 
+            // "Additions to this Web site have been blocked" error
+            await PageListItem.SystemUpdateAsync().ConfigureAwait(false);
+
+            // Activate the scheduled publishing
+            await (PnPContext.Web as Web).RawRequestAsync(new ApiCall($"_api/sitepages/pages({PageListItem.Id})/schedulepublish", ApiType.SPORest, "{}"), HttpMethod.Post).ConfigureAwait(false);
+        }
+
+        public void SchedulePublish(DateTime publishDate)
+        {
+            SchedulePublishAsync(publishDate).GetAwaiter().GetResult();
+        }
+
+        public async Task RemoveSchedulePublishAsync()
+        {
+            // ensure we do have the page list item loaded
+            if (PageListItem == null)
+            {
+                await EnsurePageListItemAsync(pageName).ConfigureAwait(false);
+            }
+
+            // Set the scheduled publish date
+            PageListItem[PageConstants._PublishStartDate] = null;
+
+            // Don't use UpdateOverWriteVersion here as the page can already be checked in, doing so will give an 
+            // "Additions to this Web site have been blocked" error
+            await PageListItem.SystemUpdateAsync().ConfigureAwait(false);
+        }
+        
+        public void RemoveSchedulePublish()
+        {
+            RemoveSchedulePublishAsync().GetAwaiter().GetResult();
+        }
+
+        #endregion
+
+        #region Page commenting and liking
         public bool AreCommentsDisabled()
         {
             return AreCommentsDisabledAsync().GetAwaiter().GetResult();
@@ -2162,7 +2220,7 @@ namespace PnP.Core.Model.SharePoint
         {
             if (PageListItem != null)
             {
-                return await PageListItem.AreCommentsDisabledAsync().ConfigureAwait(false);                
+                return await PageListItem.AreCommentsDisabledAsync().ConfigureAwait(false);
             }
             else
             {
@@ -2213,6 +2271,78 @@ namespace PnP.Core.Model.SharePoint
 
             await PageListItem.SetCommentsDisabledAsync(true).ConfigureAwait(false);
         }
+
+        public ICommentCollection GetComments(params Expression<Func<IComment, object>>[] selectors)
+        {
+            return GetCommentsAsync(selectors).GetAwaiter().GetResult();
+        }
+
+        public async Task<ICommentCollection> GetCommentsAsync(params Expression<Func<IComment, object>>[] selectors)
+        {
+            // ensure we do have the page list item loaded
+            if (PageListItem == null)
+            {
+                await EnsurePageListItemAsync(pageName).ConfigureAwait(false);
+            }
+
+            return await PageListItem.GetCommentsAsync(selectors).ConfigureAwait(false);
+        }
+
+        public async Task LikeAsync()
+        {
+            await LikeUnlike(true).ConfigureAwait(false);
+        }
+
+        public void Like()
+        {
+            LikeAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task UnlikeAsync()
+        {
+            await LikeUnlike(false).ConfigureAwait(false);
+        }
+
+        public void Unlike()
+        {
+            UnlikeAsync().GetAwaiter().GetResult();
+        }
+
+        private async Task LikeUnlike(bool like)
+        {
+            // ensure we do have the page list item loaded
+            if (PageListItem == null)
+            {
+                await EnsurePageListItemAsync(pageName).ConfigureAwait(false);
+            }
+
+            if (like)
+            {
+                await (PageListItem as ListItem).LikeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await (PageListItem as ListItem).UnlikeAsync().ConfigureAwait(false);
+            }
+        }
+
+        public async Task<ILikedByInformation> GetLikedByInformationAsync()
+        {
+            // ensure we do have the page list item loaded
+            if (PageListItem == null)
+            {
+                await EnsurePageListItemAsync(pageName).ConfigureAwait(false);
+            }
+
+            // Already load the actual likes, assuming this will be needed in most cases and thus saving the roundtrip
+            return (await PageListItem.GetAsync(p => p.LikedByInformation.QueryProperties(p => p.LikeCount, p => p.IsLikedByUser, p => p.LikedBy)).ConfigureAwait(false)).LikedByInformation;
+        }
+
+        public ILikedByInformation GetLikedByInformation()
+        {
+            return GetLikedByInformationAsync().GetAwaiter().GetResult();
+        }
+
         #endregion
 
         #region Page Deletion

@@ -29,6 +29,7 @@ namespace PnP.Core.Services
             LoadPages = loadPages;
             SkipCollectionClearing = false;
             ExecuteRequestApiCall = false;
+            Headers = null;
         }
 
         internal ApiCall(List<Core.CSOM.Requests.IRequest<object>> csomRequests, string receivingProperty = null)
@@ -51,6 +52,7 @@ namespace PnP.Core.Services
             LoadPages = false;
             SkipCollectionClearing = false;
             ExecuteRequestApiCall = false;
+            Headers = null;
         }
 
         /// <summary>
@@ -146,5 +148,10 @@ namespace PnP.Core.Services
         /// Flag that indicates this ApiCall was issued from an ExecuteRequest method
         /// </summary>
         internal bool ExecuteRequestApiCall { get; set; }
+
+        /// <summary>
+        /// Optional Http-Headers for Request to make
+        /// </summary>
+        internal Dictionary<string, string> Headers { get; set; } 
     }
 }

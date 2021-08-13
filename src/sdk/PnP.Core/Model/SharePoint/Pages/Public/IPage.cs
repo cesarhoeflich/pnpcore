@@ -127,6 +127,11 @@ namespace PnP.Core.Model.SharePoint
         public string Name { get; }
 
         /// <summary>
+        /// Returns the scheduled publish data of a page (only if publish was scheduled)
+        /// </summary>
+        public DateTime? ScheduledPublishDate { get; }
+
+        /// <summary>
         /// Adds a new section to your client side page
         /// </summary>
         /// <param name="sectionTemplate">The <see cref="CanvasSectionTemplate"/> type of the section</param>
@@ -176,6 +181,13 @@ namespace PnP.Core.Model.SharePoint
         /// <param name="control"><see cref="ICanvasControl"/> to add</param>
         /// <param name="order">Order of the control in the default section</param>
         public void AddControl(ICanvasControl control, int order);
+
+        /// <summary>
+        /// Adds a new control to your client side page in the given section
+        /// </summary>
+        /// <param name="control"><see cref="ICanvasControl"/> to add</param>
+        /// <param name="section"><see cref="ICanvasSection"/> that will hold the control. Control will end up in the <see cref="ICanvasSection.DefaultColumn"/>.</param>
+        public void AddControl(ICanvasControl control, ICanvasSection section);
 
         /// <summary>
         /// Adds a new control to your client side page in the given section with a given order
@@ -312,6 +324,28 @@ namespace PnP.Core.Model.SharePoint
         /// </summary>
         /// <param name="comment">Publishing comment</param>
         public Task PublishAsync(string comment = null);
+
+        /// <summary>
+        /// Schedules the publication of a client side page
+        /// </summary>
+        /// <param name="publishDate">Date when the page needs to be publishing</param>
+        public Task SchedulePublishAsync(DateTime publishDate);
+
+        /// <summary>
+        /// Schedules the publication of a client side page
+        /// </summary>
+        /// <param name="publishDate">Date when the page needs to be publishing</param>
+        public void SchedulePublish(DateTime publishDate);
+
+        /// <summary>
+        /// Removes the publication schedule of a client side page
+        /// </summary>
+        public Task RemoveSchedulePublishAsync();
+
+        /// <summary>
+        /// Removes the publication schedule of a client side page
+        /// </summary>
+        public void RemoveSchedulePublish();
 
         /// <summary>
         /// Demotes an client side <see cref="PageLayoutType.Article"/> news page as a regular client side page
@@ -452,6 +486,56 @@ namespace PnP.Core.Model.SharePoint
         /// </summary>
         /// <returns><see cref="IPageTranslationStatusCollection"/> list containing information about this page's translations</returns>
         IPageTranslationStatusCollection TranslatePages();
+
+        /// <summary>
+        /// Get list item comments
+        /// </summary>
+        /// <param name="selectors">The expressions declaring the fields to select</param>
+        public Task<ICommentCollection> GetCommentsAsync(params Expression<Func<IComment, object>>[] selectors);
+
+        /// <summary>
+        /// Get list item comments
+        /// </summary>
+        /// <param name="selectors">The expressions declaring the fields to select</param>
+        public ICommentCollection GetComments(params Expression<Func<IComment, object>>[] selectors);
+
+        /// <summary>
+        /// Likes a page
+        /// </summary>
+        /// <returns></returns>
+        public Task LikeAsync();
+
+        /// <summary>
+        /// Likes a page
+        /// </summary>
+        /// <returns></returns>
+#pragma warning disable CA1716 // Identifiers should not match keywords
+        public void Like();
+#pragma warning restore CA1716 // Identifiers should not match keywords
+
+        /// <summary>
+        /// Unlikes a page
+        /// </summary>
+        /// <returns></returns>
+        public Task UnlikeAsync();
+
+        /// <summary>
+        /// Unlikes a page
+        /// </summary>
+        /// <returns></returns>
+        public void Unlike();
+
+        /// <summary>
+        /// Returns information about the likes on this page
+        /// </summary>
+        /// <returns></returns>
+        public Task<ILikedByInformation> GetLikedByInformationAsync();
+
+        /// <summary>
+        /// Returns information about the likes on this page
+        /// </summary>
+        /// <returns></returns>
+        public ILikedByInformation GetLikedByInformation();
     }
 
 }

@@ -54,7 +54,7 @@ namespace PnP.Core.Services
         #region Internal properties
 
         internal readonly PnPGlobalSettingsOptions GlobalOptions;
-        internal readonly PnPContextFactoryOptions ContextOptions;
+        internal readonly PnPContextFactoryOptions ContextOptions;        
 
         #endregion
 
@@ -100,18 +100,18 @@ namespace PnP.Core.Services
             AuthenticationProvider = authenticationProvider;
             RestClient = sharePointRestClient;
             GraphClient = microsoftGraphClient;
-            this.GlobalOptions = globalOptions;
-            this.ContextOptions = contextOptions;
+            GlobalOptions = globalOptions;
+            ContextOptions = contextOptions;
             telemetry = telemetryManager;
 
-            if (this.ContextOptions != null)
+            if (ContextOptions != null)
             {
-                GraphFirst = this.ContextOptions.GraphFirst;
-                GraphAlwaysUseBeta = this.ContextOptions.GraphAlwaysUseBeta;
-                GraphCanUseBeta = this.ContextOptions.GraphCanUseBeta;
+                GraphFirst = ContextOptions.GraphFirst;
+                GraphAlwaysUseBeta = ContextOptions.GraphAlwaysUseBeta;
+                GraphCanUseBeta = ContextOptions.GraphCanUseBeta;
             }
 
-            BatchClient = new BatchClient(this, this.GlobalOptions, telemetryManager);
+            BatchClient = new BatchClient(this, GlobalOptions, telemetryManager);
         }
         #endregion
 
@@ -151,6 +151,11 @@ namespace PnP.Core.Services
         /// Unique id for this <see cref="PnPContext"/>
         /// </summary>
         internal Guid Id { get; private set; }
+
+        /// <summary>
+        /// Optional options specified during context creation, needed for context cloning
+        /// </summary>
+        internal PnPContextOptions LocalContextOptions { get; set; }
 
 #if DEBUG
 
@@ -466,7 +471,7 @@ namespace PnP.Core.Services
         {
             if (!uri.Equals(Uri))
             {
-                await PnPContextFactory.InitializeContextAsync(clonedContext).ConfigureAwait(false);
+                await PnPContextFactory.InitializeContextAsync(clonedContext, LocalContextOptions).ConfigureAwait(false);
             }
             else
             {

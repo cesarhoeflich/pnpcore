@@ -156,6 +156,12 @@ namespace PnP.Core.Services
                             }
                             else
                             {
+                                // Some collections are returned as null when they're empty (e.g. Mentions on IComment)
+                                if (property.Value.ValueKind == JsonValueKind.Null)
+                                {
+                                    continue;
+                                }
+
                                 // otherwise we try to get the child property called "results", if any
                                 property.Value.TryGetProperty("results", out resultsProperty);
                             }
@@ -264,7 +270,7 @@ namespace PnP.Core.Services
                         else // Simple property mapping
                         {
                             // Keep the id value aside when seeing it for later usage
-                            if (string.IsNullOrEmpty(idFieldValue) && property.Name.Equals(entity.SharePointKeyField.Name))
+                            if (string.IsNullOrEmpty(idFieldValue) && property.Name.Equals(entity.SharePointKeyField.SharePointName, StringComparison.InvariantCultureIgnoreCase))
                             {
                                 idFieldValue = GetJsonPropertyValue(property).ToString();
                             }
@@ -1173,7 +1179,7 @@ namespace PnP.Core.Services
             if (apiResponse.ApiCall.Type == ApiType.SPORest)
             {
                 // Changed to case insensitive because when loading data via DataStream, the ID field comes back not as "Id", but as "ID"
-                entityField = entity.Fields.FirstOrDefault(p => p.SharePointName == property.Name);
+                entityField = entity.Fields.FirstOrDefault(p => !string.IsNullOrEmpty(p.SharePointName) && p.SharePointName.Equals(property.Name, StringComparison.InvariantCultureIgnoreCase));
             }
             else if (apiResponse.ApiCall.Type == ApiType.Graph || apiResponse.ApiCall.Type == ApiType.GraphBeta)
             {
@@ -1193,6 +1199,16 @@ namespace PnP.Core.Services
             if (key.StartsWith("OData__"))
             {
                 key = key.Replace("OData__", "_");
+            }
+
+            if (key.Contains("_x005f_"))
+            {
+                key = key.Replace("_x005f_", "_");
+            }
+
+            if (key.Contains("_x0020_"))
+            {
+                key = key.Replace("_x0020_", " ");
             }
 
             if (!dictionary.ContainsKey(key))
@@ -1674,7 +1690,6 @@ namespace PnP.Core.Services
         {
             AddSharePointMetaDataProperty(target, property.Value, PnPConstants.MetaDataUri);
             AddSharePointMetaDataProperty(target, property.Value, PnPConstants.MetaDataId);
-            AddSharePointMetaDataProperty(target, property.Value, PnPConstants.MetaDataType);
             AddSharePointMetaDataProperty(target, property.Value, PnPConstants.MetaDataType);
         }
 

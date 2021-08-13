@@ -1,6 +1,7 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PnP.Core.Model.SharePoint;
 using PnP.Core.QueryModel;
+using PnP.Core.Services;
 using PnP.Core.Test.Utilities;
 using System;
 using System.Collections.Generic;
@@ -415,7 +416,7 @@ namespace PnP.Core.Test.SharePoint
                 string pageName = TestCommon.GetPnPSdkTestAssetName("PageTextTest.aspx");
 
                 page.AddSection(CanvasSectionTemplate.OneColumn, 1);
-                // 
+                
                 page.AddControl(page.NewTextPart("Normal"), page.Sections[0].Columns[0]);
                 page.AddControl(page.NewTextPart("<p>Normal</p><p>Normal</p>"), page.Sections[0].Columns[0]);
                 page.AddControl(page.NewTextPart("<h2>Heading1</h2><p>Normal</p>"), page.Sections[0].Columns[0]);
@@ -439,6 +440,79 @@ namespace PnP.Core.Test.SharePoint
                 Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[5] as PageText).Text == "<pre>fixed</pre><p>Normal</p>");
                 Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[6] as PageText).Text == "<blockquote>quote</blockquote><p>Normal</p>");
                 Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[7] as PageText).Text == "<ul><li>fixed</li></ul><p>Normal</p>");
+
+                await page.DeleteAsync();
+            }
+        }
+
+        [TestMethod]
+        public async Task PageText2Test()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                var page = await context.Web.NewPageAsync();
+                string pageName = TestCommon.GetPnPSdkTestAssetName("PageText2Test.aspx");
+
+                page.AddSection(CanvasSectionTemplate.OneColumn, 1);
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(null);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(page.NewTextPart("<h2>Heading1</h2><p>Normal</p>"), null as ICanvasSection);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(null, page.Sections[0]);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(null, 10);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(null, page.Sections[0], 20);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(page.NewTextPart("<h2>Heading1</h2><p>Normal</p>"), null as ICanvasSection, 20);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(null, page.Sections[0].Columns[0], 30);
+                });
+
+                Assert.ThrowsException<ArgumentNullException>(() =>
+                {
+                    page.AddControl(page.NewTextPart("<h3>Heading3</h3><p>Normal</p>"), null as ICanvasColumn, 30);
+                });
+
+                page.AddControl(page.NewTextPart("Normal"));
+                page.AddControl(page.NewTextPart("<h2>Heading1</h2><p>Normal</p>"), page.Sections[0]);
+                page.AddControl(page.NewTextPart("<p>Normal</p><p>Normal</p>"), 10);
+                page.AddControl(page.NewTextPart("<h2>Heading1</h2><p>Normal</p>"), page.Sections[0], 20);
+                page.AddControl(page.NewTextPart("<h3>Heading3</h3><p>Normal</p>"), page.Sections[0].Columns[0], 30);
+
+                await page.SaveAsync(pageName);
+
+                // Load the page again
+                var pages = await context.Web.GetPagesAsync(pageName);
+                var createdPage = pages.First();
+
+                Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[0] as PageText).Text == "Normal");
+                Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[1] as PageText).Text == "<h2>Heading1</h2><p>Normal</p>");
+                Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[2] as PageText).Text == "<p>Normal</p><p>Normal</p>");
+                Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[3] as PageText).Text == "<h2>Heading1</h2><p>Normal</p>");
+                Assert.IsTrue((createdPage.Sections[0].Columns[0].Controls[4] as PageText).Text == "<h3>Heading3</h3><p>Normal</p>");
 
                 await page.DeleteAsync();
             }
@@ -1665,7 +1739,6 @@ namespace PnP.Core.Test.SharePoint
             }
         }
 
-
         [TestMethod]
         public async Task SavePageAsTemplate()
         {
@@ -1693,6 +1766,39 @@ namespace PnP.Core.Test.SharePoint
         }
 
         [TestMethod]
+        public async Task SavePageAsTemplateInNewWeb()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                // Create a new sub site to test as we don't want to break the main site home page
+                string webTitle = "DutchTemplateWeb";
+                var addedWeb = await context.Web.Webs.AddAsync(new WebOptions { Title = webTitle, Url = webTitle, Language = 1043 });
+
+                // Create a context for the newly created web
+                using (var context2 = await TestCommon.Instance.CloneAsync(context, addedWeb.Url, 1))
+                {
+                    var newPage = await context2.Web.NewPageAsync();
+                    string pageName = TestCommon.GetPnPSdkTestAssetName("SavePageAsTemplate.aspx");
+                    // Save the page
+                    newPage.SaveAsTemplate(pageName);
+
+                    // Load the template page again as regular page
+                    var pages = await context2.Web.GetPagesAsync(pageName);
+                    var templatePage = pages.AsEnumerable().First();
+
+                    var templateFolder = templatePage.GetTemplatesFolder();
+                    var pageFolder = templatePage.Folder;
+
+                    Assert.AreEqual(templateFolder, pageFolder);
+                }
+
+                // Delete the web to cleanup the test artefacts
+                await addedWeb.DeleteAsync();
+            }
+        }
+
+        [TestMethod]
         public async Task SavePageWithDataAsTemplate()
         {
             //TestCommon.Instance.Mocking = false;
@@ -1713,7 +1819,7 @@ namespace PnP.Core.Test.SharePoint
                 // Create new page from this template
                 string pageName = TestCommon.GetPnPSdkTestAssetName("FromTemplate.aspx");
                 (templatePage.Sections[0].Controls[0] as IPageText).Text = "Updated content";
-                await templatePage.SaveAsync(pageName);                
+                templatePage.Save(pageName);                
 
                 pages = await context.Web.GetPagesAsync(TestCommon.GetPnPSdkTestAssetName(""));
                 var fromTemplatePage = pages.AsEnumerable().FirstOrDefault(p => p.Name == pageName);
@@ -2189,7 +2295,7 @@ namespace PnP.Core.Test.SharePoint
 
         #endregion
 
-        #region Page comments handling
+        #region Page likes and comments handling
 
         [TestMethod]
         public async Task DisableEnablePageComments()
@@ -2219,6 +2325,217 @@ namespace PnP.Core.Test.SharePoint
 
                 // enabled comments again
                 await newPage.EnableCommentsAsync();
+
+                // Delete the page
+                await newPage.DeleteAsync();
+            }
+        }
+
+        [TestMethod]
+        public async Task LikeUnLikePage()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                var newPage = await context.Web.NewPageAsync();
+                string pageName = TestCommon.GetPnPSdkTestAssetName("LikeUnLikePage.aspx");
+
+                // Save the page
+                await newPage.SaveAsync(pageName);
+
+                // Publish the page, required before it can be liked
+                newPage.Publish();
+
+                // Like the page
+                newPage.Like();
+
+                // Get a list of users who liked this page
+                var pageLikeInformation = newPage.GetLikedByInformation();
+
+                Assert.IsTrue(pageLikeInformation != null);
+                Assert.IsTrue(pageLikeInformation.IsLikedByUser == true);
+                Assert.IsTrue(pageLikeInformation.LikeCount == "1");
+                Assert.IsTrue(pageLikeInformation.LikedBy.Length == 1);
+
+                var firstUserThatLikedThePage = pageLikeInformation.LikedBy.AsRequested().First();
+
+                Assert.IsTrue(firstUserThatLikedThePage.Id > 0);
+                Assert.IsTrue(!string.IsNullOrEmpty(firstUserThatLikedThePage.LoginName));
+                Assert.IsTrue(!string.IsNullOrEmpty(firstUserThatLikedThePage.Mail));
+                Assert.IsTrue(!string.IsNullOrEmpty(firstUserThatLikedThePage.Name));
+                Assert.IsTrue(firstUserThatLikedThePage.CreationDate < DateTime.Now);
+
+                // Unlike the page
+                newPage.Unlike();
+
+                // Get a list of users who liked this page
+                pageLikeInformation = newPage.GetLikedByInformation();
+
+                Assert.IsTrue(pageLikeInformation != null);
+                Assert.IsTrue(pageLikeInformation.IsLikedByUser == false);
+                Assert.IsTrue(pageLikeInformation.LikeCount == "0");
+                Assert.IsTrue(pageLikeInformation.LikedBy.Length == 0);
+
+                // Delete the page
+                await newPage.DeleteAsync();
+            }
+        }
+
+        [TestMethod]
+        public async Task PageCommentingTest()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                var newPage = await context.Web.NewPageAsync();
+                string pageName = TestCommon.GetPnPSdkTestAssetName("PageCommentingTest.aspx");
+
+                // Save the page
+                await newPage.SaveAsync(pageName);
+
+                // Publish the page, required before it can be liked
+                newPage.Publish();
+
+                // Get Page comments                
+                var comments = newPage.GetComments();
+                Assert.IsTrue(comments.Length == 0);
+
+                // Add a new comment with an at mentioning
+                var currentUser = await context.Web.GetCurrentUserAsync();
+
+                var addedComment = comments.Add($"This is great {comments.GetAtMentioningString("Bert", currentUser.UserPrincipalName)}!");
+
+                // verify exception handling of GetAtMentioningString
+                Assert.ThrowsException<ArgumentException>(() =>
+                {
+                    comments.GetAtMentioningString(null, currentUser.UserPrincipalName);
+                });
+
+                Assert.ThrowsException<ArgumentException>(() =>
+                {
+                    comments.GetAtMentioningString("Bert", null);
+                });
+
+                // Like the added comment
+                addedComment.Like();
+
+                // Add a reply
+                var addedReply = addedComment.Replies.Add("this is a reply");
+
+                // Like the reply
+                addedReply.Like();
+
+                comments = newPage.GetComments();
+                Assert.IsTrue(comments.Length == 1);
+
+                var firstAtMention = comments.AsRequested().First().Mentions.AsRequested().First();
+                // loginName: i:0#.f|membership|bert.jansen@bertonline.onmicrosoft.com
+                Assert.IsTrue(firstAtMention.LoginName.Split('|')[2] == currentUser.UserPrincipalName);
+
+                // Delete the page
+                await newPage.DeleteAsync();
+            }
+        }
+        #endregion
+
+        #region Page scheduling
+
+        [TestMethod]
+        public async Task SchedulePagePublish()
+        {
+            //TestCommon.Instance.Mocking = false;
+
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.NoGroupTestSite))
+            {
+                var newPage = await context.Web.NewPageAsync();
+                string pageName = TestCommon.GetPnPSdkTestAssetName("SchedulePagePublish.aspx");
+
+                // Save the page
+                await newPage.SaveAsync(pageName);
+
+                // Schedule the page publishing
+                DateTime scheduleDate = DateTime.MinValue;
+                if (!TestCommon.Instance.Mocking)
+                {
+                    scheduleDate = DateTime.Now + new TimeSpan(0, 5, 0);
+                    Dictionary<string, string> properties = new Dictionary<string, string>
+                        {
+                            { "Ticks", scheduleDate.Ticks.ToString() },
+                        };
+                    TestManager.SaveProperties(context, properties);
+                }
+                else
+                {
+                    var properties = TestManager.GetProperties(context);
+                    scheduleDate = new DateTime(long.Parse(properties["Ticks"]));
+                }
+                
+                newPage.SchedulePublish(scheduleDate);
+
+                // Verify the scheduled publishing date
+                if (!TestCommon.RunningInGitHubWorkflow())
+                {
+                    Assert.AreEqual(scheduleDate.Day, newPage.ScheduledPublishDate.Value.Day);
+                    Assert.AreEqual(scheduleDate.Hour, newPage.ScheduledPublishDate.Value.Hour);
+                    Assert.AreEqual(scheduleDate.Minute, newPage.ScheduledPublishDate.Value.Minute);
+                }
+                else
+                {
+                    Assert.IsTrue(newPage.ScheduledPublishDate.Value > DateTime.MinValue);
+                }
+
+                // Load the page again
+                var pages = await context.Web.GetPagesAsync(pageName);
+                var createdPage = pages.First();
+
+                // Verify the scheduled publishing date
+                if (!TestCommon.RunningInGitHubWorkflow())
+                {
+                    Assert.AreEqual(scheduleDate.Day, createdPage.ScheduledPublishDate.Value.Day);
+                    Assert.AreEqual(scheduleDate.Hour, createdPage.ScheduledPublishDate.Value.Hour);
+                    Assert.AreEqual(scheduleDate.Minute, createdPage.ScheduledPublishDate.Value.Minute);
+                }
+                else
+                {
+                    Assert.IsTrue(createdPage.ScheduledPublishDate.Value > DateTime.MinValue);
+                }
+
+                // Clear the scheduled publishing
+                createdPage.RemoveSchedulePublish();
+
+                Assert.IsFalse(createdPage.ScheduledPublishDate.HasValue);
+
+                // reload the page again
+                pages = await context.Web.GetPagesAsync(pageName);
+                createdPage = pages.First();
+
+                Assert.IsFalse(createdPage.ScheduledPublishDate.HasValue);
+
+                // Delete the page
+                await newPage.DeleteAsync();
+            }
+        }
+
+        [TestMethod]
+        public async Task VerifyScheduledPublishDateOnSubSite()
+        {
+            //TestCommon.Instance.Mocking = false;
+
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSubSite))
+            {
+                var newPage = await context.Web.NewPageAsync();
+                string pageName = TestCommon.GetPnPSdkTestAssetName("VerifyScheduledPublishDateOnSubSite.aspx");
+
+                // Save the page
+                await newPage.SaveAsync(pageName);
+
+                Assert.IsFalse(newPage.ScheduledPublishDate.HasValue);
+
+                // Load the page again
+                var pages = await context.Web.GetPagesAsync(pageName);
+                var createdPage = pages.First();
+
+                Assert.IsFalse(createdPage.ScheduledPublishDate.HasValue);
 
                 // Delete the page
                 await newPage.DeleteAsync();
@@ -2421,6 +2738,45 @@ namespace PnP.Core.Test.SharePoint
 
                 // Delete the page
                 await topicPage.DeleteAsync();
+            }
+        }
+        #endregion
+
+        #region Other page types : SingleWebPartAppPage page
+        [TestMethod]
+        public async Task SingleWebPartAppPageCreate()
+        {
+            //TestCommon.Instance.Mocking = false;
+            using (var context = await TestCommon.Instance.GetContextAsync(TestCommon.TestSite))
+            {
+                // Create new "spaces" page
+                var newPage = await context.Web.NewPageAsync(PageLayoutType.SingleWebPartAppPage);
+                string pageName = TestCommon.GetPnPSdkTestAssetName("SingleWebPartAppPageCreate.aspx");
+
+                // adding sections to the page
+                newPage.AddSection(CanvasSectionTemplate.OneColumn, 1);
+
+                // get the web part 'blueprint' --> this uses our standard test app
+                // See setuptestenv.ps1 for the PnP PS commands to install the test app (.\TestAssets\pnpcoresdk-test-app.sppkg)
+                var availableComponents = await newPage.AvailablePageComponentsAsync();
+                var pnpWebPartComponent = availableComponents.FirstOrDefault(p => p.Id == "{9A57F808-CA0E-408E-B28C-319A9C8204ED}");
+                var pnpWebPart = newPage.NewWebPart(pnpWebPartComponent);
+
+                // add the web part to the first column of the first section
+                newPage.AddControl(pnpWebPart, newPage.Sections[0].Columns[0]);
+
+                // Save the page
+                await newPage.SaveAsync(pageName);
+
+                // Load the page again
+                var pages = await context.Web.GetPagesAsync(pageName);
+                Assert.IsTrue(pages.Count == 1);
+                newPage = pages.AsEnumerable().First();
+
+                Assert.IsTrue(newPage.LayoutType == PageLayoutType.SingleWebPartAppPage);
+
+                // Delete the page
+                await newPage.DeleteAsync();
             }
         }
         #endregion

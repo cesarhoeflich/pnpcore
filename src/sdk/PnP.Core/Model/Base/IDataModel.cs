@@ -1,7 +1,6 @@
 ﻿using PnP.Core.Services;
 using System;
 using System.Linq.Expressions;
-using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace PnP.Core.Model
@@ -73,5 +72,35 @@ namespace PnP.Core.Model
         /// <param name="request">API call to execute</param>
         /// <returns>The response of the API call</returns>
         ApiRequestResponse ExecuteRequest(ApiRequest request);
+
+        /// <summary>
+        /// Executes a given API call 
+        /// </summary>
+        /// <param name="request">API call to execute</param>
+        /// <returns>The response of the API call</returns>
+        Task<IBatchSingleResult<BatchResultValue<string>>> ExecuteRequestBatchAsync(ApiRequest request);
+
+        /// <summary>
+        /// Executes a given API call 
+        /// </summary>
+        /// <param name="request">API call to execute</param>
+        /// <returns>The response of the API call</returns>
+        IBatchSingleResult<BatchResultValue<string>> ExecuteRequestBatch(ApiRequest request);
+
+        /// <summary>
+        /// Executes a given API call 
+        /// </summary>
+        /// <param name="batch"></param>
+        /// <param name="request">API call to execute</param>        
+        /// <returns>The response of the API call</returns>
+        Task<IBatchSingleResult<BatchResultValue<string>>> ExecuteRequestBatchAsync(Batch batch, ApiRequest request);
+
+        /// <summary>
+        /// Executes a given API call 
+        /// </summary>
+        /// <param name="batch"></param>
+        /// <param name="request">API call to execute</param>        
+        /// <returns>The response of the API call</returns>
+        IBatchSingleResult<BatchResultValue<string>> ExecuteRequestBatch(Batch batch, ApiRequest request);
     }
 }
